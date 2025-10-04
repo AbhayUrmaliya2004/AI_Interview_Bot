@@ -45,30 +45,30 @@ mic_device_index = 0
 # -------------------- CAPTURE SPEECH --------------------
 
 def capture_speech():
-    """Capture speech both locally (with Microphone) and on cloud (browser input)"""
-    
-    # Cloud version: use browser mic
+    # Local version: use Microphone
+    recognizer = sr.Recognizer()
+    mic_list = sr.Microphone.list_microphone_names()
+    if not mic_list:
+        st.error("⚠️ No microphone detected. Connect one and refresh.")
+        return None
+
+    mic_device_index = mic_list.index(mic_list[0])  # just pick first mic
     try:
-        audio_data = st.audio_input("🎤 Speak your answer here (record from browser)")
-        if not audio_data:
-            st.warning("Please record your voice to continue.")
-            return None
+        with sr.Microphone(device_index=mic_device_index) as source:
+            st.info("🎤 Listening... Speak now")
+            recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            audio = recognizer.listen(source, timeout=7)
 
-        st.info("⏳ Processing your answer...")
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-            tmp_file.write(audio_data.read())
-            tmp_path = tmp_file.name
-
-        recognizer = sr.Recognizer()
-        with sr.AudioFile(tmp_path) as source:
-            audio = recognizer.record(source)
         text = recognizer.recognize_google(audio)
         st.success(f"You said: {text}")
         return text
-
+    except sr.UnknownValueError:
+        st.error("Could not understand your speech.")
+    except sr.RequestError:
+        st.error("Speech Recognition API unavailable.")
     except Exception as e:
-        st.error(f"Cloud audio processing error: {e}")
-        return None
+        st.error(f"Microphone error: {e}")
+    return None
 
 
 # -------------------- DISPLAY CHAT HISTORY --------------------
