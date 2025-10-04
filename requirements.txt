@@ -1,7 +1,6 @@
+streamlit
 langchain
 langgraph
-dotenv
+python-dotenv
 langchain_groq
 SpeechRecognition
-pyaudio
-gTTS
