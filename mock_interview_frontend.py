@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage
 from mock_interview_backend import get_chatbot
 from dotenv import load_dotenv
 import speech_recognition as sr
+import os
 import tempfile
 
 load_dotenv()
@@ -42,63 +43,31 @@ mic_list = ["Browser Microphone"]
 mic_device_index = 0
 
 # -------------------- CAPTURE SPEECH --------------------
-import streamlit as st
-import speech_recognition as sr
-import tempfile
-import os
 
 def capture_speech():
     """Capture speech both locally (with Microphone) and on cloud (browser input)"""
     
-    # Detect if running in Streamlit Cloud
-    if os.environ.get("STREAMLIT_SERVER_RUNNING"):  
-        # Cloud version: use browser mic
-        try:
-            audio_data = st.audio_input("🎤 Speak your answer here (record from browser)")
-            if not audio_data:
-                st.warning("Please record your voice to continue.")
-                return None
-
-            st.info("⏳ Processing your answer...")
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
-                tmp_file.write(audio_data.read())
-                tmp_path = tmp_file.name
-
-            recognizer = sr.Recognizer()
-            with sr.AudioFile(tmp_path) as source:
-                audio = recognizer.record(source)
-            text = recognizer.recognize_google(audio)
-            st.success(f"You said: {text}")
-            return text
-
-        except Exception as e:
-            st.error(f"Cloud audio processing error: {e}")
+    # Cloud version: use browser mic
+    try:
+        audio_data = st.audio_input("🎤 Speak your answer here (record from browser)")
+        if not audio_data:
+            st.warning("Please record your voice to continue.")
             return None
 
-    else:
-        # Local version: use Microphone
+        st.info("⏳ Processing your answer...")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+            tmp_file.write(audio_data.read())
+            tmp_path = tmp_file.name
+
         recognizer = sr.Recognizer()
-        mic_list = sr.Microphone.list_microphone_names()
-        if not mic_list:
-            st.error("⚠️ No microphone detected. Connect one and refresh.")
-            return None
+        with sr.AudioFile(tmp_path) as source:
+            audio = recognizer.record(source)
+        text = recognizer.recognize_google(audio)
+        st.success(f"You said: {text}")
+        return text
 
-        mic_device_index = mic_list.index(mic_list[0])  # just pick first mic
-        try:
-            with sr.Microphone(device_index=mic_device_index) as source:
-                st.info("🎤 Listening... Speak now")
-                recognizer.adjust_for_ambient_noise(source, duration=0.5)
-                audio = recognizer.listen(source, timeout=7)
-
-            text = recognizer.recognize_google(audio)
-            st.success(f"You said: {text}")
-            return text
-        except sr.UnknownValueError:
-            st.error("Could not understand your speech.")
-        except sr.RequestError:
-            st.error("Speech Recognition API unavailable.")
-        except Exception as e:
-            st.error(f"Microphone error: {e}")
+    except Exception as e:
+        st.error(f"Cloud audio processing error: {e}")
         return None
 
 
