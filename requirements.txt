@@ -1,0 +1,7 @@
+langchain
+langgraph
+dotenv
+langchain_groq
+SpeechRecognition
+pyaudio
+gTTS
