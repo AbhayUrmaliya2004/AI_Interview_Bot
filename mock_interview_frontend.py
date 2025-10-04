@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage
 from mock_interview_backend import get_chatbot
 from dotenv import load_dotenv
 import speech_recognition as sr
+import tempfile
 
 load_dotenv()
 st.set_page_config(page_title="AI Interview BOT", layout="centered")
@@ -31,46 +32,74 @@ with st.sidebar:
         "Entry Level", "Mid Level", "Senior Level"
     ])
 
-
 # -------------------- MICROPHONE DROPDOWN --------------------
 recognizer = sr.Recognizer()
-recognizer.pause_threshold = 4 # 5 seconds pause may be there while speaking
+recognizer.pause_threshold = 4  # 5 seconds pause may be there while speaking
 
-mic_list = sr.Microphone.list_microphone_names()
-if not mic_list:
-    st.error("⚠️ No microphone detected. Connect one and refresh.")
-    st.stop()
+# mic_list and device selection are skipped for cloud deployment
+# These lines are retained only for local reference (won't affect cloud)
+mic_list = ["Browser Microphone"]
+mic_device_index = 0
 
-mic_device_index = mic_list.index(
-    st.sidebar.selectbox("Select Microphone:", mic_list, index=0)
-)
-
+# -------------------- CAPTURE SPEECH --------------------
+import streamlit as st
+import speech_recognition as sr
+import tempfile
+import os
 
 def capture_speech():
-    try:
-        with sr.Microphone(device_index=mic_device_index) as source:
-            st.info("🎤 Listening... Speak now (you have 5 seconds)")
-            recognizer.adjust_for_ambient_noise(source, duration=0.5)
-
-            # Limit listening so user knows it will stop
-            try:
-                audio = recognizer.listen(source, timeout=7)
-                st.info("⏳ Processing your answer...")
-            except sr.WaitTimeoutError:
-                st.warning("No speech detected within 3 seconds.")
+    """Capture speech both locally (with Microphone) and on cloud (browser input)"""
+    
+    # Detect if running in Streamlit Cloud
+    if os.environ.get("STREAMLIT_SERVER_RUNNING"):  
+        # Cloud version: use browser mic
+        try:
+            audio_data = st.audio_input("🎤 Speak your answer here (record from browser)")
+            if not audio_data:
+                st.warning("Please record your voice to continue.")
                 return None
 
+            st.info("⏳ Processing your answer...")
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
+                tmp_file.write(audio_data.read())
+                tmp_path = tmp_file.name
+
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(tmp_path) as source:
+                audio = recognizer.record(source)
+            text = recognizer.recognize_google(audio)
+            st.success(f"You said: {text}")
+            return text
+
+        except Exception as e:
+            st.error(f"Cloud audio processing error: {e}")
+            return None
+
+    else:
+        # Local version: use Microphone
+        recognizer = sr.Recognizer()
+        mic_list = sr.Microphone.list_microphone_names()
+        if not mic_list:
+            st.error("⚠️ No microphone detected. Connect one and refresh.")
+            return None
+
+        mic_device_index = mic_list.index(mic_list[0])  # just pick first mic
         try:
+            with sr.Microphone(device_index=mic_device_index) as source:
+                st.info("🎤 Listening... Speak now")
+                recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                audio = recognizer.listen(source, timeout=7)
+
             text = recognizer.recognize_google(audio)
             st.success(f"You said: {text}")
             return text
         except sr.UnknownValueError:
-            st.error("Sorry, I couldn't understand what you said.")
+            st.error("Could not understand your speech.")
         except sr.RequestError:
-            st.error("API unavailable or network error.")
-    except Exception as e:
-        st.error(f"Microphone error: {e}")
-    return None
+            st.error("Speech Recognition API unavailable.")
+        except Exception as e:
+            st.error(f"Microphone error: {e}")
+        return None
 
 
 # -------------------- DISPLAY CHAT HISTORY --------------------
@@ -101,12 +130,9 @@ def handle_input(user_input):
         )
         st.session_state["message_history"].append({"role": "assistant", "content": response})
 
-    # 🔄 Generate next question automatically and if not satisfied give user the hint to the answer or
-    # try asking the new question to work on this 
-
 # -------------------- UI BUTTONS --------------------
 if st.button("🎙️ Answer with Voice"):
     speech_text = capture_speech()
     if speech_text:
         handle_input(speech_text)
-        st.rerun()  # 🔄 This will refresh UI with correct order
+        st.rerun()  # 🔄 Refresh UI with updated chat history
